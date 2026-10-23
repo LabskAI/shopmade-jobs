@@ -89,3 +89,64 @@ it('only assigns jobs to staff', function () {
     $this->actingAs($admin)->post(route('jobs.store'), $payload(portalClient($customer)->id))->assertSessionHasErrors('assigned_to');
     $this->actingAs($admin)->post(route('jobs.store'), $payload(User::factory()->user()->create()->id))->assertSessionHasNoErrors();
 });
+
+it('sends photos with no-store so hidden ones leave the browser cache', function () {
+    Storage::fake('local');
+    $photo = storedPhoto(Job::factory()->create());
+
+    $response = $this->actingAs(User::factory()->admin()->create())->get($photo->url())->assertOk();
+
+    expect($response->headers->get('Cache-Control'))->toContain('no-store')->toContain('private');
+});
+
+it('keeps later customer deleting listeners running', function () {
+    $ran = false;
+    Customer::deleting(function () use (&$ran): void {
+        $ran = true;
+    });
+
+    Customer::factory()->create()->delete();
+
+    expect($ran)->toBeTrue();
+});
+
+it('clears the end when the edit form clears the start', function () {
+    $admin = User::factory()->admin()->create();
+    $job = Job::factory()->create(['scheduled_at' => now()->addDay(), 'scheduled_end_at' => now()->addDay()->addHour()]);
+
+    $this->actingAs($admin)->put(route('jobs.update', $job), [
+        'customer_id' => $job->customer_id,
+        'status' => JobStatus::Scheduled->value,
+        'scheduled_at' => '',
+        'scheduled_end_at' => now()->addDay()->addHour()->format('Y-m-d\TH:i'),
+    ])->assertSessionHasNoErrors();
+
+    expect($job->refresh()->scheduled_at)->toBeNull()->and($job->scheduled_end_at)->toBeNull();
+});
+
+it('leaves deactivated staff out of the assignee list', function () {
+    $admin = User::factory()->admin()->create();
+    User::factory()->user()->create(['name' => 'Gone Worker', 'deactivated_at' => now()]);
+    User::factory()->user()->create(['name' => 'Active Worker']);
+
+    $this->actingAs($admin)->get(route('jobs.create'))->assertSee('Active Worker')->assertDontSee('Gone Worker');
+});
+
+it('moves public photos to the private disk and deletes the public copy only once it is there', function () {
+    Storage::fake('public');
+    Storage::fake('local');
+    $job = Job::factory()->create();
+    $moved = JobPhoto::factory()->for($job)->create(['path' => 'job-photos/a.jpg', 'thumb_path' => 'job-photos/a-thumb.jpg']);
+    $already = JobPhoto::factory()->for($job)->create(['path' => 'job-photos/b.jpg', 'thumb_path' => null]);
+
+    Storage::disk('public')->put($moved->path, 'original');
+    Storage::disk('public')->put($moved->thumb_path, 'thumb');
+    Storage::disk('public')->put($already->path, 'stale');
+    Storage::disk('local')->put($already->path, 'private');
+
+    (require __DIR__.'/../../database/migrations/2026_10_23_120000_move_job_photos_to_the_private_disk.php')->up();
+
+    Storage::disk('public')->assertMissing([$moved->path, $moved->thumb_path, $already->path]);
+    Storage::disk('local')->assertExists([$moved->path, $moved->thumb_path]);
+    expect(Storage::disk('local')->get($already->path))->toBe('private');
+});

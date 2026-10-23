@@ -23,7 +23,7 @@ class JobPhotoFileController extends Controller
         abort_unless($disk->exists($path), 404);
 
         return $disk->response($path, null, [
-            'Cache-Control' => 'private, max-age=3600',
+            'Cache-Control' => 'private, no-store',
             'X-Content-Type-Options' => 'nosniff',
         ]);
     }

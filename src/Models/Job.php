@@ -28,7 +28,7 @@ class Job extends Model
     {
         static::deleting(function (Job $job): void {
             $store = app(JobPhotoStore::class);
-            $job->photos()->each(fn (JobPhoto $photo) => $store->deleteFiles($photo));
+            $job->photos()->lazyById()->each(fn (JobPhoto $photo) => $store->deleteFiles($photo));
         });
     }
 

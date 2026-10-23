@@ -14,7 +14,8 @@ use Shopmade\Jobs\Models\JobPhoto;
 
 /**
  * Writes job photos to the private disk. Originals are re-encoded with GD, which drops EXIF (GPS included) after
- * applying its orientation, and a thumbnail is written beside each one. Files are served by JobPhotoFileController.
+ * applying its orientation; PNG and WebP keep their transparency. A JPEG thumbnail is written beside each one, with
+ * transparent areas flattened onto white. Files are served by JobPhotoFileController.
  */
 class JobPhotoStore
 {
@@ -31,24 +32,29 @@ class JobPhotoStore
     public function store(Job $job, UploadedFile $file, ?User $uploader, JobPhotoKind $kind, ?string $caption = null, bool $clientVisible = true): JobPhoto
     {
         $contents = (string) file_get_contents($file->getRealPath());
-        $image = $this->decode($contents);
         $format = match ($file->getMimeType()) {
             'image/png' => 'png',
             'image/webp' => 'webp',
             default => 'jpg',
         };
+        $image = $this->decode($contents);
 
         $directory = 'job-photos/'.$job->id;
         $name = Str::random(40);
         $disk = Storage::disk(JobPhoto::DISK);
 
         $path = $directory.'/'.$name.'.'.$format;
-        $disk->put($path, $this->encode($image, $format));
+        $original = $this->encode($image, $format);
+        $thumb = $this->encode($this->flatten($this->thumbnail($image)), 'jpg', 80);
+        imagedestroy($image);
 
         $thumbPath = $directory.'/'.$name.'-thumb.jpg';
-        $disk->put($thumbPath, $this->encode($this->thumbnail($image), 'jpg', 80));
 
-        imagedestroy($image);
+        if (! $disk->put($path, $original) || ! $disk->put($thumbPath, $thumb)) {
+            $disk->delete([$path, $thumbPath]);
+
+            throw ValidationException::withMessages(['photos' => 'The photo could not be saved. Try again.']);
+        }
 
         return $job->photos()->create([
             'user_id' => $uploader?->id,
@@ -65,6 +71,21 @@ class JobPhotoStore
             'caption' => $caption,
             'client_visible' => $clientVisible,
         ]);
+    }
+
+    /**
+     * Re-encodes stored image bytes in the given format, dropping their metadata. Used to clean photos stored before
+     * uploads were re-encoded.
+     *
+     * @throws ValidationException when GD can't decode or encode the image
+     */
+    public function reencode(string $contents, string $format): string
+    {
+        $image = $this->decode($contents);
+        $encoded = $this->encode($format === 'jpg' ? $this->flatten($image) : $image, $format);
+        imagedestroy($image);
+
+        return $encoded;
     }
 
     public function delete(JobPhoto $photo): void
@@ -93,13 +114,55 @@ class JobPhotoStore
             throw ValidationException::withMessages(['photos' => 'Each photo must be an image of at most 40 megapixels.']);
         }
 
+        if (! $this->fitsInMemory($size[0] * $size[1])) {
+            throw ValidationException::withMessages(['photos' => 'That photo is too large for this server to process. Try a smaller one.']);
+        }
+
         $image = @imagecreatefromstring($contents);
 
         if ($image === false) {
             throw ValidationException::withMessages(['photos' => 'That photo could not be read.']);
         }
 
+        imagealphablending($image, false);
+        imagesavealpha($image, true);
+
         return $this->applyExifOrientation($image, $contents);
+    }
+
+    /**
+     * GD holds about 5 bytes per pixel, and a rotation or thumbnail briefly needs a second copy.
+     */
+    private function fitsInMemory(int $pixels): bool
+    {
+        $limit = $this->bytes((string) ini_get('memory_limit'));
+
+        return $limit <= 0 || memory_get_usage() + $pixels * 5 * 2 < $limit;
+    }
+
+    private function bytes(string $value): int
+    {
+        $number = (int) $value;
+
+        return match (strtolower(substr(trim($value), -1))) {
+            'g' => $number * 1024 ** 3,
+            'm' => $number * 1024 ** 2,
+            'k' => $number * 1024,
+            default => $number,
+        };
+    }
+
+    /**
+     * Copies the image onto white, so transparent areas don't turn black in a JPEG.
+     */
+    private function flatten(GdImage $image): GdImage
+    {
+        $flat = imagecreatetruecolor(imagesx($image), imagesy($image));
+        imagefill($flat, 0, 0, (int) imagecolorallocate($flat, 255, 255, 255));
+        imagealphablending($flat, true);
+        imagecopy($flat, $image, 0, 0, 0, 0, imagesx($image), imagesy($image));
+
+        return $flat;
     }
 
     private function thumbnail(GdImage $image): GdImage
@@ -112,20 +175,40 @@ class JobPhotoStore
 
         $scaled = imagescale($image, self::THUMB_WIDTH, (int) round(imagesy($image) * self::THUMB_WIDTH / $width));
 
-        return $scaled === false ? $image : $scaled;
+        if ($scaled === false) {
+            return $image;
+        }
+
+        imagealphablending($scaled, false);
+        imagesavealpha($scaled, true);
+
+        return $scaled;
     }
 
+    /**
+     * @throws ValidationException
+     */
     private function encode(GdImage $image, string $format, int $quality = 85): string
     {
-        ob_start();
-
-        match ($format) {
-            'png' => imagepng($image),
-            'webp' => imagewebp($image, null, $quality),
-            default => imagejpeg($image, null, $quality),
+        $encoder = match ($format) {
+            'png' => 'imagepng',
+            'webp' => 'imagewebp',
+            default => 'imagejpeg',
         };
 
-        return (string) ob_get_clean();
+        if (! function_exists($encoder)) {
+            throw ValidationException::withMessages(['photos' => 'This server cannot save '.strtoupper($format).' photos. Upload a JPEG instead.']);
+        }
+
+        ob_start();
+        $written = $format === 'png' ? imagepng($image) : $encoder($image, null, $quality);
+        $bytes = (string) ob_get_clean();
+
+        if (! $written || $bytes === '') {
+            throw ValidationException::withMessages(['photos' => 'That photo could not be saved.']);
+        }
+
+        return $bytes;
     }
 
     private function applyExifOrientation(GdImage $image, string $contents): GdImage
@@ -134,21 +217,47 @@ class JobPhotoStore
             return $image;
         }
 
-        $exif = @exif_read_data('data://image/jpeg;base64,'.base64_encode($contents));
+        $stream = fopen('php://memory', 'r+b');
+
+        if ($stream === false) {
+            return $image;
+        }
+
+        fwrite($stream, $contents);
+        rewind($stream);
+        $exif = @exif_read_data($stream);
+        fclose($stream);
+
         $orientation = (int) ($exif['Orientation'] ?? 1);
 
-        $rotated = match ($orientation) {
-            3 => imagerotate($image, 180, 0),
-            6 => imagerotate($image, -90, 0),
-            8 => imagerotate($image, 90, 0),
-            default => null,
+        if ($orientation < 2 || $orientation > 8) {
+            return $image;
+        }
+
+        if (in_array($orientation, [2, 4, 5, 7], true)) {
+            imageflip($image, $orientation === 4 ? IMG_FLIP_VERTICAL : IMG_FLIP_HORIZONTAL);
+        }
+
+        $angle = match ($orientation) {
+            3 => 180,
+            6, 7 => -90,
+            5, 8 => 90,
+            default => 0,
         };
 
-        if ($rotated === null || $rotated === false) {
+        if ($angle === 0) {
+            return $image;
+        }
+
+        $rotated = imagerotate($image, $angle, 0);
+
+        if ($rotated === false) {
             return $image;
         }
 
         imagedestroy($image);
+        imagealphablending($rotated, false);
+        imagesavealpha($rotated, true);
 
         return $rotated;
     }

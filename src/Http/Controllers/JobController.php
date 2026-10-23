@@ -100,7 +100,7 @@ class JobController extends Controller
 
     private function validated(Request $request): array
     {
-        return $request->validate([
+        $data = $request->validate([
             'customer_id' => ['required', 'exists:customers,id'],
             'assigned_to' => ['nullable', Rule::exists('users', 'id')->whereNot('role', UserRole::Client->value)->whereNull('deactivated_at')],
             'scheduled_at' => ['nullable', 'date'],
@@ -108,12 +108,19 @@ class JobController extends Controller
             'status' => ['required', Rule::enum(JobStatus::class)],
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
+
+        if (blank($data['scheduled_at'] ?? null)) {
+            $data['scheduled_end_at'] = null;
+        }
+
+        return $data;
     }
 
     private function staff()
     {
         return User::query()
             ->where('role', '!=', UserRole::Client)
+            ->whereNull('deactivated_at')
             ->orderBy('name')
             ->get();
     }
