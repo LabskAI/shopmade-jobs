@@ -1,0 +1,24 @@
+{
+    "name": "labskai/shopmade-jobs",
+    "description": "Jobs, schedule, crew photos and client visits for Shopmade.",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.4",
+        "laravel/framework": "^13.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Shopmade\\Jobs\\": "src/",
+            "Shopmade\\Jobs\\Database\\Factories\\": "database/factories/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Shopmade\\Jobs\\JobsServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "stable"
+}
