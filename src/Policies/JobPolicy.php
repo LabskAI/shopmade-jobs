@@ -4,6 +4,7 @@ namespace Shopmade\Jobs\Policies;
 
 use App\Models\User;
 use Shopmade\Jobs\Models\Job;
+use Shopmade\Jobs\Models\JobPhoto;
 
 class JobPolicy
 {
@@ -35,6 +36,18 @@ class JobPolicy
     public function managePhotos(User $user, Job $job): bool
     {
         return $this->update($user, $job);
+    }
+
+    /**
+     * Staff see every photo; a client sees only photos of their own customer's jobs that are visible to clients.
+     */
+    public function viewPhoto(User $user, Job $job, JobPhoto $photo): bool
+    {
+        if (! $user->isClient()) {
+            return $user->can('staff.access');
+        }
+
+        return $photo->client_visible && $this->isMember($user, $job);
     }
 
     public function comment(User $user, Job $job): bool

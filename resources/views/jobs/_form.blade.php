@@ -5,7 +5,7 @@
             name="customer_id"
             required
             :options="$customers->pluck('name', 'id')"
-            :selected="old('customer_id', $job->customer_id ?? $selectedCustomerId)"
+            :selected="old('customer_id', isset($job) ? $job->customer_id : ($selectedCustomerId ?? null))"
             :error="$errors->has('customer_id')"
         />
     </x-field>
@@ -14,7 +14,7 @@
             id="assigned_to"
             name="assigned_to"
             :options="$staff->pluck('name', 'id')"
-            :selected="old('assigned_to', $job->assigned_to ?? null)"
+            :selected="old('assigned_to', isset($job) ? $job->assigned_to : null)"
             placeholder="Unassigned"
             :error="$errors->has('assigned_to')"
         />
@@ -43,11 +43,11 @@
             name="status"
             required
             :options="collect($statuses)->mapWithKeys(fn ($status) => [$status->value => $status->label()])"
-            :selected="old('status', $job->status->value ?? 'scheduled')"
+            :selected="old('status', isset($job) ? $job->status->value : 'scheduled')"
             :error="$errors->has('status')"
         />
     </x-field>
-    <x-field class="sm:col-span-2" label="Notes" for="notes" :error="$errors->first('notes')">
-        <x-textarea id="notes" name="notes" rows="4" :error="$errors->has('notes')">{{ old('notes', $job->notes ?? '') }}</x-textarea>
+    <x-field class="sm:col-span-2" label="Notes (the client sees these)" for="notes" :error="$errors->first('notes')" hint="Shown on the client's visit page. Up to 2,000 characters.">
+        <x-textarea id="notes" name="notes" rows="4" maxlength="2000" :error="$errors->has('notes')">{{ old('notes', isset($job) ? $job->notes : '') }}</x-textarea>
     </x-field>
 </div>

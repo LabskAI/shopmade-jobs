@@ -12,7 +12,7 @@ use Tests\TestCase;
 pest()->extend(TestCase::class)->use(RefreshDatabase::class);
 
 it('lets staff upload photos and writes a thumbnail beside each original', function () {
-    Storage::fake('public');
+    Storage::fake('local');
 
     $crew = User::factory()->user()->create();
     $job = Job::factory()->create();
@@ -39,10 +39,10 @@ it('lets staff upload photos and writes a thumbnail beside each original', funct
         ->and($photo->client_visible)->toBeTrue()
         ->and($photo->thumb_path)->not->toBeNull();
 
-    Storage::disk('public')->assertExists($photo->path);
-    Storage::disk('public')->assertExists($photo->thumb_path);
+    Storage::disk('local')->assertExists($photo->path);
+    Storage::disk('local')->assertExists($photo->thumb_path);
 
-    [$width] = getimagesizefromstring(Storage::disk('public')->get($photo->thumb_path));
+    [$width] = getimagesizefromstring(Storage::disk('local')->get($photo->thumb_path));
 
     expect($width)->toBeLessThanOrEqual(640);
 
@@ -54,7 +54,7 @@ it('lets staff upload photos and writes a thumbnail beside each original', funct
 });
 
 it('rejects files that are not images or are too large', function () {
-    Storage::fake('public');
+    Storage::fake('local');
 
     $crew = User::factory()->user()->create();
     $job = Job::factory()->create();
@@ -75,7 +75,7 @@ it('rejects files that are not images or are too large', function () {
 });
 
 it('forbids clients from uploading photos', function () {
-    Storage::fake('public');
+    Storage::fake('local');
 
     $client = User::factory()->client()->create();
     $job = Job::factory()->create();
@@ -89,7 +89,7 @@ it('forbids clients from uploading photos', function () {
 });
 
 it('lets staff hide a photo from the client and delete it with its files', function () {
-    Storage::fake('public');
+    Storage::fake('local');
 
     $admin = User::factory()->admin()->create();
     $job = Job::factory()->create();
@@ -115,8 +115,8 @@ it('lets staff hide a photo from the client and delete it with its files', funct
         ->delete(route('jobs.photos.destroy', [$job, $photo]))
         ->assertRedirect(route('jobs.show', $job));
 
-    Storage::disk('public')->assertMissing($photo->path);
-    Storage::disk('public')->assertMissing($photo->thumb_path);
+    Storage::disk('local')->assertMissing($photo->path);
+    Storage::disk('local')->assertMissing($photo->thumb_path);
     expect(JobPhoto::query()->find($photo->id))->toBeNull();
 });
 

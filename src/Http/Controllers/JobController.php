@@ -102,11 +102,11 @@ class JobController extends Controller
     {
         return $request->validate([
             'customer_id' => ['required', 'exists:customers,id'],
-            'assigned_to' => ['nullable', 'exists:users,id'],
+            'assigned_to' => ['nullable', Rule::exists('users', 'id')->whereNot('role', UserRole::Client->value)->whereNull('deactivated_at')],
             'scheduled_at' => ['nullable', 'date'],
-            'scheduled_end_at' => ['nullable', 'date', 'after:scheduled_at'],
+            'scheduled_end_at' => ['exclude_without:scheduled_at', 'nullable', 'date', 'after:scheduled_at'],
             'status' => ['required', Rule::enum(JobStatus::class)],
-            'notes' => ['nullable', 'string'],
+            'notes' => ['nullable', 'string', 'max:2000'],
         ]);
     }
 

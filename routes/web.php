@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use Shopmade\Jobs\Http\Controllers\JobCommentController;
 use Shopmade\Jobs\Http\Controllers\JobController;
 use Shopmade\Jobs\Http\Controllers\JobPhotoController;
+use Shopmade\Jobs\Http\Controllers\JobPhotoFileController;
 use Shopmade\Jobs\Http\Controllers\JobScheduleController;
 use Shopmade\Jobs\Http\Controllers\JobStatusController;
 use Shopmade\Jobs\Http\Controllers\Portal\PortalJobController;
@@ -18,6 +19,10 @@ Route::middleware(['web', 'auth', 'can:staff.access'])->group(function () {
     Route::post('jobs/{job}/photos', [JobPhotoController::class, 'store'])->name('jobs.photos.store');
     Route::patch('jobs/{job}/photos/{photo}', [JobPhotoController::class, 'update'])->name('jobs.photos.update')->scopeBindings();
     Route::delete('jobs/{job}/photos/{photo}', [JobPhotoController::class, 'destroy'])->name('jobs.photos.destroy')->scopeBindings();
+});
+
+Route::middleware(['web', 'auth'])->group(function () {
+    Route::get('job-photos/{photo}/{variant}', JobPhotoFileController::class)->whereIn('variant', ['original', 'thumb'])->name('jobs.photos.file');
 });
 
 Route::middleware(['web', 'auth', 'can:portal.access'])->prefix('portal')->name('portal.')->group(function () {

@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Shopmade\Jobs\Database\Factories\JobFactory;
 use Shopmade\Jobs\Enums\JobStatus;
+use Shopmade\Jobs\Services\JobPhotoStore;
 
 #[UseFactory(JobFactory::class)]
 #[Fillable(['customer_id', 'assigned_to', 'scheduled_at', 'scheduled_end_at', 'status', 'notes'])]
@@ -19,6 +20,17 @@ class Job extends Model
 {
     /** @use HasFactory<JobFactory> */
     use HasFactory;
+
+    /**
+     * The database cascade removes photo rows without firing model events, so delete their files first.
+     */
+    protected static function booted(): void
+    {
+        static::deleting(function (Job $job): void {
+            $store = app(JobPhotoStore::class);
+            $job->photos()->each(fn (JobPhoto $photo) => $store->deleteFiles($photo));
+        });
+    }
 
     protected function casts(): array
     {

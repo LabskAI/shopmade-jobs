@@ -8,7 +8,7 @@
     <form method="POST" action="{{ route('jobs.store') }}" class="max-w-3xl">
         @csrf
         <x-card title="Details">
-            @include('jobs._form')
+            @include('jobs::jobs._form')
             <div class="mt-6 flex justify-start gap-2">
                 <x-button type="submit">Save</x-button>
                 <x-button variant="secondary" href="{{ route('jobs.index') }}">Cancel</x-button>

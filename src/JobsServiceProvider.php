@@ -29,6 +29,7 @@ class JobsServiceProvider extends ServiceProvider
         Gate::policy(Job::class, JobPolicy::class);
 
         Customer::resolveRelationUsing('jobs', fn (Customer $customer) => $customer->hasMany(Job::class));
+        Customer::deleting(fn (Customer $customer) => $customer->jobs()->each(fn (Job $job) => $job->delete()));
 
         $hooks->tool([
             'slug' => 'jobs',

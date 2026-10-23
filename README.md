@@ -15,13 +15,12 @@ Jobs, a weekly schedule, crew photos and job conversations for [Shopmade core](h
 ```bash
 composer require labskai/shopmade-jobs
 php artisan migrate
-php artisan storage:link   # photos are served from the public disk
 npm run build              # picks up the package's Tailwind classes
 ```
 
 Core finds the package through Laravel package discovery. Remove it with `composer remove labskai/shopmade-jobs`; its nav entries, panels and portal tab go with it.
 
-Photos need the GD extension for thumbnails (EXIF for phone orientation). Without GD the original is shown in place of the thumbnail.
+Photos are stored on the private `local` disk and served only to staff and to clients of the job's customer while the photo is visible to them. Uploads need the GD extension: each original is re-encoded, which strips EXIF (GPS included) after applying the phone's orientation (EXIF extension), and a thumbnail is written beside it. Images over 40 megapixels are refused.
 
 Quote and invoice buttons on a job show only when a package provides the `quotes.create` and `invoices.create` routes.
 

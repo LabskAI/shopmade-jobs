@@ -15,7 +15,7 @@ class JobScheduleController extends Controller
 
         $data = $request->validate([
             'scheduled_at' => ['nullable', 'date'],
-            'scheduled_end_at' => ['nullable', 'date', 'after:scheduled_at'],
+            'scheduled_end_at' => ['exclude_without:scheduled_at', 'nullable', 'date', 'after:scheduled_at'],
         ]);
 
         $job->update([

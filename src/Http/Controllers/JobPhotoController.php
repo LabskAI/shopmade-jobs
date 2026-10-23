@@ -23,15 +23,16 @@ class JobPhotoController extends Controller
 
         $data = $request->validate([
             'photos' => ['required', 'array', 'min:1', 'max:10'],
-            'photos.*' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:'.self::MAX_KILOBYTES],
+            'photos.*' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:'.self::MAX_KILOBYTES, 'dimensions:max_width=10000,max_height=10000'],
             'kind' => ['nullable', Rule::enum(JobPhotoKind::class)],
             'caption' => ['nullable', 'string', 'max:255'],
+            'client_visible' => ['sometimes', 'boolean'],
         ]);
 
         $kind = isset($data['kind']) ? JobPhotoKind::from($data['kind']) : JobPhotoKind::Other;
 
         foreach ($request->file('photos', []) as $file) {
-            $this->store->store($job, $file, $request->user(), $kind, $data['caption'] ?? null);
+            $this->store->store($job, $file, $request->user(), $kind, $data['caption'] ?? null, $request->boolean('client_visible', true));
         }
 
         $count = count($request->file('photos', []));

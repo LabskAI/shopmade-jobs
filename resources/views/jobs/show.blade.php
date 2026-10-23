@@ -114,6 +114,10 @@
                     <x-field class="sm:col-span-2" label="Caption" for="photo_caption" :error="$errors->first('caption')">
                         <x-input id="photo_caption" name="caption" value="{{ old('caption') }}" placeholder="Optional" :error="$errors->has('caption')" />
                     </x-field>
+                    <div class="sm:col-span-3">
+                        <input type="hidden" name="client_visible" value="0">
+                        <x-checkbox name="client_visible" value="1" :checked="old('client_visible', true)" label="Visible to client" />
+                    </div>
                 </div>
                 <div class="mt-3 flex gap-2">
                     <x-button type="submit">

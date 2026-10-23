@@ -8,7 +8,6 @@ use Illuminate\Database\Eloquent\Attributes\UseFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Facades\Storage;
 use Shopmade\Jobs\Database\Factories\JobPhotoFactory;
 use Shopmade\Jobs\Enums\JobPhotoKind;
 
@@ -19,7 +18,7 @@ class JobPhoto extends Model
     /** @use HasFactory<JobPhotoFactory> */
     use HasFactory;
 
-    public const string DISK = 'public';
+    public const string DISK = 'local';
 
     protected function casts(): array
     {
@@ -42,13 +41,11 @@ class JobPhoto extends Model
 
     public function url(): string
     {
-        return Storage::disk(self::DISK)->url($this->path);
+        return route('jobs.photos.file', ['photo' => $this, 'variant' => 'original']);
     }
 
     public function thumbUrl(): string
     {
-        return $this->thumb_path
-            ? Storage::disk(self::DISK)->url($this->thumb_path)
-            : $this->url();
+        return $this->thumb_path ? route('jobs.photos.file', ['photo' => $this, 'variant' => 'thumb']) : $this->url();
     }
 }
